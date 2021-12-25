@@ -16,6 +16,7 @@ page 50101 "Fixed Asset Allocation Card"
                 {
                     ToolTip = 'Specifies the value of the No. field.';
                     ApplicationArea = All;
+                    Editable = false;
                 }
                 field("Fixed Asset No."; Rec."Fixed Asset No.")
                 {
@@ -31,6 +32,7 @@ page 50101 "Fixed Asset Allocation Card"
                 {
                     ToolTip = 'Specifies the value of the Responsible User field.';
                     ApplicationArea = All;
+                    Editable = false;
                 }
                 field("New User"; Rec."New User")
                 {
@@ -89,7 +91,7 @@ page 50101 "Fixed Asset Allocation Card"
                 {
                     ApplicationArea = all;
                     Caption = 'Send A&pproval Request';
-                    Enabled = true; //(NOT OpenApprovalEntriesExist) AND EnabledApprovalWorkflowsExist;//AND CanRequestApprovalForFlow;
+                    Enabled = (NOT OpenApprovalEntriesExist) AND EnabledApprovalWorkflowsExist;//AND CanRequestApprovalForFlow;
                     Image = SendApprovalRequest;
                     Promoted = true;
                     PromotedCategory = Category6;
@@ -109,7 +111,7 @@ page 50101 "Fixed Asset Allocation Card"
                 {
                     ApplicationArea = All;
                     Caption = 'Cancel Approval Re&quest';
-                    Enabled = true; //CanCancelApprovalForRecord OR CanCancelApprovalForFlow;
+                    Enabled = CanCancelApprovalForRecord;
                     Image = CancelApprovalRequest;
                     Promoted = true;
                     PromotedCategory = Category6;
@@ -143,27 +145,37 @@ page 50101 "Fixed Asset Allocation Card"
             }
         }
     }
+    trigger OnOpenPage()
+    begin
+        WorkFlowEventFilter :=
+        CustWEFHandling.RunWorkflowOnSendFAAllocationForApprovalCode;
+        SetWorkFlowEnabled();
+    end;
+
     trigger OnAfterGetCurrRecord()
     var
         WorkflowStepInstance: Record "Workflow Step Instance";
         CRMCouplingManagement: Codeunit "CRM Coupling Management";
         WorkflowWebhookManagement: Codeunit "Workflow Webhook Management";
     begin
-        WorkflowWebhookManagement.GetCanRequestAndCanCancel(RecordId, CanRequestApprovalForFlow, CanCancelApprovalForFlow);
-        if AnyWorkflowExists then begin
-            CanCancelApprovalForRecord := ApprovalsMgmt.CanCancelApprovalForRecord(RecordId);
-            WorkflowStepInstance.SetRange("Record ID", RecordId);
-            ShowWorkflowStatus := not WorkflowStepInstance.IsEmpty();
-            //if ShowWorkflowStatus then
-            //CurrPage.WorkflowStatus.PAGE.SetFilterOnWorkflowRecord(RecordId);
-            OpenApprovalEntriesExist := ApprovalsMgmt.HasOpenApprovalEntries(RecordId);
-            if OpenApprovalEntriesExist then
-                OpenApprovalEntriesExistCurrUser := ApprovalsMgmt.HasOpenApprovalEntriesForCurrentUser(RecordId)
-            else
-                OpenApprovalEntriesExistCurrUser := false;
-        end;
+        WorkflowWebhookManagement.GetCanRequestAndCanCancel(Rec.RecordId, CanRequestApprovalForFlow, CanCancelApprovalForFlow);
+        CanCancelApprovalForRecord := ApprovalsMgmt.CanCancelApprovalForRecord(RecordId);
+        WorkflowStepInstance.SetRange("Record ID", Rec.RecordId);
+        ShowWorkflowStatus := not WorkflowStepInstance.IsEmpty();
+        OpenApprovalEntriesExist := ApprovalsMgmt.HasOpenApprovalEntries(RecordId);
+        if OpenApprovalEntriesExist then
+            OpenApprovalEntriesExistCurrUser := ApprovalsMgmt.HasOpenApprovalEntriesForCurrentUser(RecordId)
+        else
+            OpenApprovalEntriesExistCurrUser := false;
 
+    end;
 
+    local procedure SetWorkFlowEnabled()
+    var
+        WorkflowManagement: Codeunit "Workflow Management";
+    begin
+        AnyWorkflowExists := WorkflowManagement.AnyWorkflowExists();
+        EnabledApprovalWorkflowsExist := WorkflowManagement.EnabledWorkflowExist(DATABASE::"Fixed Asset Allocation", WorkFlowEventFilter);
     end;
 
 
@@ -177,8 +189,9 @@ page 50101 "Fixed Asset Allocation Card"
         CanRequestApprovalForFlow: Boolean;
         CanCancelApprovalForFlow: Boolean;
         ApprovalsMgmt: Codeunit "Approvals Mgmt.";
-
         CustApprovalsMgmt: Codeunit "Custom Approval Mgmt";
+        WorkFlowEventFilter: Text;
+        CustWEFHandling: Codeunit "Custom Workflow Events";
 
 
 
